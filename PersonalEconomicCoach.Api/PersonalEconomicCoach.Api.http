@@ -1,0 +1,96 @@
+@baseUrl = http://localhost:5080
+
+### API liveness
+GET {{baseUrl}}/health
+
+### Database + existing source-table readiness
+GET {{baseUrl}}/health/ready
+
+### Accounts
+GET {{baseUrl}}/accounts
+
+### Transactions
+GET {{baseUrl}}/transactions?from=2026-10-01&to=2026-10-31
+
+### Q1 - baskets
+GET {{baseUrl}}/insights/baskets
+
+### Q2 - comparison
+GET {{baseUrl}}/insights/comparison
+
+### Q3 - leaks
+GET {{baseUrl}}/insights/leaks
+
+### Q4 - safe-to-spend now + month-end projection
+GET {{baseUrl}}/insights/safe-to-spend
+
+### Q5 - what-if
+POST {{baseUrl}}/insights/what-if
+Content-Type: application/json
+
+{
+  "restaurants_pct": 20,
+  "shopping_eur": 30,
+  "extra_savings_eur": 100
+}
+
+### Ask - Q4
+POST {{baseUrl}}/ask
+Content-Type: application/json
+
+{
+  "question_id": 4,
+  "text": "How much can I safely spend now, and what may I have at month end?",
+  "tone": "gentle"
+}
+
+### Add an event
+POST {{baseUrl}}/events
+Content-Type: application/json
+
+{
+  "name": "Friend's gift",
+  "date": "2026-11-16",
+  "amount": 40
+}
+
+### Get the plan
+GET {{baseUrl}}/plan
+
+### Update the plan
+PUT {{baseUrl}}/plan
+Content-Type: application/json
+
+{
+  "safety_buffer": 60,
+  "savings_goal": 100,
+  "payday": "2026-11-27"
+}
+
+
+### Start a new conversation (response contains conversation_id)
+POST {{baseUrl}}/ask
+Content-Type: application/json
+
+{
+  "question_id": 1,
+  "text": "Where did my money go this month?",
+  "tone": "gentle"
+}
+
+### Continue a conversation (replace 1 with the returned conversation_id)
+POST {{baseUrl}}/ask
+Content-Type: application/json
+
+{
+  "conversation_id": 1,
+  "question_id": 3,
+  "text": "What are my biggest everyday leaks?",
+  "tone": "honest"
+}
+
+### List this customer's conversations
+GET {{baseUrl}}/conversations
+
+### Read messages in a conversation
+GET {{baseUrl}}/conversations/1/messages
