@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace PersonalEconomicCoach.Api.Services;
 
 public interface IDateProvider
@@ -13,6 +15,16 @@ public sealed class HelsinkiDateProvider(IConfiguration configuration) : IDatePr
     {
         get
         {
+            // Demo override: the challenge dataset ends on 2026-09-30, so a fixed "today"
+            // keeps month-based insights populated. Leave App:DemoToday empty to use the real date.
+            var demoToday = configuration["App:DemoToday"];
+            if (!string.IsNullOrWhiteSpace(demoToday)
+                && DateOnly.TryParseExact(demoToday, "yyyy-MM-dd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var fixedToday))
+            {
+                return fixedToday;
+            }
+
             var local = TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, _timeZone);
             return DateOnly.FromDateTime(local.DateTime);
         }

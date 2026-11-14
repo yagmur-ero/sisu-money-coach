@@ -109,7 +109,7 @@ public sealed record ComparisonInsight(
 public sealed record LeakItem(
     string Merchant,
     string Category,
-    int TransactionCount,
+    long TransactionCount, // MySQL COUNT(*) returns BIGINT; Dapper needs the exact type for records
     decimal TotalAmount,
     decimal AverageTransaction);
 
@@ -149,7 +149,7 @@ public sealed record UncertainSetupItem(
     string MatchType,
     string MatchValue,
     string Category,
-    int TransactionCount,
+    long TransactionCount, // MySQL COUNT(*) returns BIGINT; Dapper needs the exact type for records
     decimal TotalAmount,
     string SuggestedBasket,
     string Reason);

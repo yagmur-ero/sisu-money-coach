@@ -23,6 +23,8 @@ WITH source_transactions AS (
         t.mcc_code,
         CASE
             WHEN LOWER(COALESCE(t.transaction_type, '')) LIKE '%transfer%' THEN 'TRANSFER'
+            -- Moving money to own savings/investments is not spending, and taking it back is not income.
+            WHEN LOWER(COALESCE(t.transaction_type, '')) IN ('salary_sweep', 'investment_deposit', 'investment_withdrawal') THEN 'TRANSFER'
             WHEN LOWER(COALESCE(t.transaction_type, '')) LIKE '%refund%' THEN 'REFUND'
             WHEN LOWER(COALESCE(t.transaction_type, '')) LIKE '%cashback%' THEN 'REFUND'
             WHEN t.tx_amount_eur < 0 THEN 'EXPENSE'
@@ -49,6 +51,8 @@ WITH source_transactions AS (
         t.mcc_code,
         CASE
             WHEN LOWER(COALESCE(t.transaction_type, '')) LIKE '%transfer%' THEN 'TRANSFER'
+            -- Moving money to own savings/investments is not spending, and taking it back is not income.
+            WHEN LOWER(COALESCE(t.transaction_type, '')) IN ('salary_sweep', 'investment_deposit', 'investment_withdrawal') THEN 'TRANSFER'
             WHEN LOWER(COALESCE(t.transaction_type, '')) LIKE '%refund%' THEN 'REFUND'
             WHEN LOWER(COALESCE(t.transaction_type, '')) LIKE '%cashback%' THEN 'REFUND'
             WHEN t.tx_amount_eur < 0 THEN 'EXPENSE'
@@ -83,6 +87,21 @@ WITH source_transactions AS (
         MAX(monthly_maximum) AS maximum_amount
     FROM monthly_merchant_stats
     GROUP BY customer_id, merchant_id
+), category_small_stats AS (
+    -- Leaks: many small purchases in the same category in one month (often spread across different shops).
+    SELECT
+        customer_id,
+        category,
+        DATE_FORMAT(tx_date, '%Y-%m') AS month_key,
+        COUNT(*) AS small_count
+    FROM source_transactions
+    WHERE direction = 'EXPENSE'
+      AND tx_date >= @HistoryStart
+      AND tx_date <= @AsOfDate
+      AND ABS(amount_eur) <= @LeakMaxAverageTransaction
+      AND category IS NOT NULL
+      AND category <> ''
+    GROUP BY customer_id, category, DATE_FORMAT(tx_date, '%Y-%m')
 ), classified AS (
     SELECT
         t.id,
@@ -98,8 +117,13 @@ WITH source_transactions AS (
         CASE
             WHEN merchant_override.basket IS NOT NULL THEN merchant_override.basket
             WHEN category_override.basket IS NOT NULL THEN category_override.basket
+            -- Rent and utility bills are recurring by nature (they have no merchant_id in the dataset).
+            WHEN LOWER(COALESCE(t.transaction_type, '')) IN ('housing_payment', 'utilities_payment') THEN 'regular'
             WHEN COALESCE(month_stats.month_count, 0) >= @LeakMinMonthlyTransactions
                  AND COALESCE(month_stats.monthly_average, 999999) <= @LeakMaxAverageTransaction
+                 THEN 'leaks'
+            WHEN ABS(t.amount_eur) <= @LeakMaxAverageTransaction
+                 AND COALESCE(small_stats.small_count, 0) >= @LeakMinMonthlyTransactions
                  THEN 'leaks'
             WHEN COALESCE(merchant_stats.active_months, 0) >= 2
                  AND (COALESCE(merchant_stats.maximum_amount, 0) - COALESCE(merchant_stats.minimum_amount, 0))
@@ -111,9 +135,13 @@ WITH source_transactions AS (
         CASE
             WHEN merchant_override.basket IS NOT NULL THEN 'USER_MERCHANT_OVERRIDE'
             WHEN category_override.basket IS NOT NULL THEN 'USER_CATEGORY_OVERRIDE'
+            WHEN LOWER(COALESCE(t.transaction_type, '')) IN ('housing_payment', 'utilities_payment') THEN 'RECURRING_BILL'
             WHEN COALESCE(month_stats.month_count, 0) >= @LeakMinMonthlyTransactions
                  AND COALESCE(month_stats.monthly_average, 999999) <= @LeakMaxAverageTransaction
                  THEN 'FREQUENT_SMALL_PURCHASES'
+            WHEN ABS(t.amount_eur) <= @LeakMaxAverageTransaction
+                 AND COALESCE(small_stats.small_count, 0) >= @LeakMinMonthlyTransactions
+                 THEN 'FREQUENT_SMALL_PURCHASES_IN_CATEGORY'
             WHEN COALESCE(merchant_stats.active_months, 0) >= 2
                  AND (COALESCE(merchant_stats.maximum_amount, 0) - COALESCE(merchant_stats.minimum_amount, 0))
                      <= GREATEST(COALESCE(merchant_stats.average_amount, 0) * @RegularAmountTolerance, 2)
@@ -129,6 +157,10 @@ WITH source_transactions AS (
     LEFT JOIN merchant_stats
         ON merchant_stats.customer_id = t.customer_id
        AND merchant_stats.merchant_id = t.merchant_id
+    LEFT JOIN category_small_stats small_stats
+        ON small_stats.customer_id = t.customer_id
+       AND small_stats.category = t.category
+       AND small_stats.month_key = DATE_FORMAT(t.tx_date, '%Y-%m')
     LEFT JOIN basket_overrides merchant_override
         ON merchant_override.customer_id = t.customer_id
        AND merchant_override.match_type = 'merchant'

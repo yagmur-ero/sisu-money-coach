@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
@@ -6,6 +6,7 @@
     <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
     <RootNamespace>PersonalEconomicCoach.Api</RootNamespace>
     <AssemblyName>PersonalEconomicCoach.Api</AssemblyName>
+    <UserSecretsId>5d6bae0a-fa5e-43e8-bb5c-9e8df484e39c</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Dapper" Version="2.1.66" />

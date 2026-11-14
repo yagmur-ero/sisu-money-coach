@@ -168,7 +168,9 @@ WHERE tx_date >= @PreviousStart AND tx_date < @CurrentEndExclusive
 
         const string sql = FinancialSql.ClassifiedExpensesCte + @"
 SELECT
-    COALESCE(NULLIF(merchant_id, ''), 'Unknown merchant') AS Merchant,
+    -- Grouped by category: small purchases are usually spread across many shops.
+    CASE WHEN COUNT(DISTINCT merchant_id) = 1 THEN COALESCE(NULLIF(MAX(merchant_id), ''), 'Unknown merchant')
+         ELSE CONCAT(COUNT(DISTINCT merchant_id), ' different places') END AS Merchant,
     COALESCE(NULLIF(category, ''), 'Uncategorized') AS Category,
     COUNT(*) AS TransactionCount,
     COALESCE(SUM(expense_amount), 0) AS TotalAmount,
@@ -176,7 +178,7 @@ SELECT
 FROM classified
 WHERE basket = 'leaks'
   AND tx_date >= @PeriodStart AND tx_date < @PeriodEndExclusive
-GROUP BY merchant_id, category
+GROUP BY category
 ORDER BY TotalAmount DESC
 LIMIT 10;";
 
