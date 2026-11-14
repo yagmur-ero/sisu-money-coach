@@ -1,6 +1,13 @@
 import { MOCK, HOME } from "./mockData";
 import { formatDate, daysUntil } from "./dates";
 
+const COACH_URL = import.meta.env.VITE_COACH_URL ?? "/coach";
+
+// Days between two "YYYY-MM-DD" dates (count from the backend's date, not the device clock)
+export function daysBetween(fromIso, toIso) {
+  return Math.round((new Date(toIso + "T00:00:00") - new Date(fromIso + "T00:00:00")) / 86400000);
+}
+
 // Real backend: put VITE_API_URL=http://localhost:5080 (or /api with the Vite proxy) in .env
 const API_URL = import.meta.env.VITE_API_URL;
 export const USE_API = Boolean(API_URL);
@@ -128,7 +135,7 @@ export async function getHome({ events = [] } = {}) {
       budget: {
         monthly,
         safe_to_spend: Number(safe.safe_to_spend_now ?? 0),
-        days_left: until ? Math.max(daysUntil(until), 1) : 30,
+        days_left: until ? Math.max(asOf ? daysBetween(asOf, until) : daysUntil(until), 1) : 30,
       },
     };
   }
@@ -142,10 +149,42 @@ export async function getHome({ events = [] } = {}) {
   return { ...HOME, budget: { ...HOME.budget, safe_to_spend: safe, days_left: d.days_left } };
 }
 
+async function askSisuCoach({ text, tone, history }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(`${COACH_URL}/advice`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        customer_id: "CUST00001",
+        message: text,
+        tone,
+        history: history
+          .filter((m) => m.text)
+          .slice(-6)
+          .map((m) => ({ role: m.from === "me" ? "user" : "assistant", content: String(m.text).slice(0, 2000) })),
+      }),
+    });
+    if (!res.ok) throw new Error(`Coach error ${res.status}`);
+    const data = await res.json();
+    return { type: null, answer: data.reply, data: null };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /* ---------- Chat ---------- */
 // Returns { type, answer, data }
-export async function askCoach({ questionId, text, tone, events = [] }) {
+export async function askCoach({ questionId, text, tone, events = [], history=[] }) {
   if (USE_API) {
+    if (questionId == null) {
+      try {
+        return await askSisuCoach({ text, tone, history });
+      } catch {}
+    }
+
     const res = await request("/ask", {
       method: "POST",
       body: JSON.stringify({ question_id: questionId ?? null, text, tone }),

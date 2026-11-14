@@ -110,7 +110,7 @@ export default function App() {
     setMessages((m) => [...m, { from: "me", text }]);
     setLoading(true);
     try {
-      const res = await askCoach({ questionId, text, tone: coach.tone, events });
+      const res = await askCoach({ questionId, text, tone: coach.tone, events, history:messages });
       setMessages((m) => [...m, { from: "coach", text: res.answer, type: res.type, data: res.data }]);
       setStats((s) => ({ ...s, questions: s.questions + 1 }));
     } catch (err) {

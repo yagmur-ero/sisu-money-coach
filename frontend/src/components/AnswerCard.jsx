@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { daysUntil } from "../dates";
-import { savePlan, whatIf } from "../api";
+import { savePlan, whatIf, daysBetween } from "../api";
 
 const eur = (n) => `${Math.round(Number(n) || 0)} €`;
 const eur1 = (n) => `${Math.round((Number(n) || 0) * 10) / 10} €`;
@@ -291,7 +291,9 @@ function toSafeView(data) {
         ["Safety buffer", -Number(data.safety_buffer)],
         ["Savings goal", -Number(data.savings_goal)],
       ],
-      daysLeft: until ? Math.max(daysUntil(until), 1) : 30,
+      daysLeft: until 
+      ? Math.max(data.balance_as_of ? daysBetween(String(data.balance_as_of).slice(0, 10), until) : daysUntil(until), 1)
+        : 30,
       projected: m.projected_balance ?? null,
       advice: data.advice ?? [],
     };
