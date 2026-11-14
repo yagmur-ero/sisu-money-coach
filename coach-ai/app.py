@@ -334,7 +334,16 @@ Hard rules:
 - You are not a licensed financial advisor. For big decisions, gently suggest talking to a professional."""
 
 
-def ask_llm(facts, message, history):
+# The app lets the user pick a tone for their coach. Every tone keeps the hard rules above.
+TONES = {
+    "gentle": "Tone: gentle. Extra soft, supportive and encouraging.",
+    "honest": "Tone: honest. Direct and practical, still kind and respectful.",
+    "roast": ("Tone: roast. Light, playful humor about the numbers, like a cheeky friend. "
+              "Joke about the spending, never about the person; never mean, never shaming."),
+}
+
+
+def ask_llm(facts, message, history, tone="gentle"):
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         return None
@@ -342,7 +351,8 @@ def ask_llm(facts, message, history):
         from openai import OpenAI
 
         client = OpenAI(api_key=api_key, base_url=AI_BASE_URL, timeout=20)
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        system = SYSTEM_PROMPT + "\n\n" + TONES.get(tone, TONES["gentle"])
+        messages = [{"role": "system", "content": system}]
         for turn in history[-6:]:
             if turn.role in ("user", "assistant") and turn.content.strip():
                 messages.append({"role": turn.role, "content": turn.content})
@@ -423,6 +433,7 @@ class AdviceRequest(BaseModel):
     customer_id: str = Field(default="CUST00001", max_length=32)
     message: str = Field(default="How can I plan next month?", max_length=1000)
     history: list[Turn] = Field(default_factory=list)
+    tone: str = Field(default="gentle", max_length=16)
 
 
 @app.get("/health")
@@ -442,7 +453,7 @@ def profile(customer_id: str):
 @app.post("/advice")
 def advice(request: AdviceRequest):
     facts = build_facts(request.customer_id)
-    reply = ask_llm(facts, request.message, request.history)
+    reply = ask_llm(facts, request.message, request.history, request.tone.lower())
     source = "ai"
     if reply is None:
         reply, source = template_reply(facts), "template"
